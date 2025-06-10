@@ -34,7 +34,9 @@ data class LabelResponse(
 
 @Serializable
 data class LabelAnnotation(
-    val description: String
+    val description: String,
+    val score: Float,
+    val topicality: Float
 )
 
 }

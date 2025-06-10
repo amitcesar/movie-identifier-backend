@@ -15,6 +15,10 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.Base64
 
+private val stopwords = setOf(
+    "smile", "happiness", "poster", "advertising", "model", "vacation", "white-collar worker"
+)
+
 class GoogleVisionService(private val apiKey: String) {
 
     private val client = HttpClient(CIO) {
@@ -40,26 +44,46 @@ class GoogleVisionService(private val apiKey: String) {
             url { parameters.append("key", apiKey) }
             setBody(requestBody)
         }
+
         val rawJson = response.bodyAsText()
-        println("🚫 Resultado da Vision API: $rawJson")
+//        println("📦 Resultado da Vision API: $rawJson")
         if ("\"error\"" in rawJson) {
             println("🚫 Erro da Vision API: $rawJson")
             return emptyList()
         }
 
-
         val json = response.body<VisionModels.VisionResponse>()
 
-        val labels = json.responses
+        val rawLabels = json.responses
             .firstOrNull()
             ?.labelAnnotations
-            ?.map { it.description }
             ?: emptyList()
 
-        if (labels.isEmpty()) {
-            println("⚠️ Nenhum label retornado. Pode ser uma imagem genérica ou erro interno.")
+        println("🔍 Labels detectadas brutas:")
+        rawLabels.forEach {
+            println("→ ${it.description} | score=${it.score} | topicality=${it.topicality}")
         }
-        return labels
+
+        val filtered = rawLabels
+            .filter { it.score >= 0.65f && it.topicality >= 0.02f }
+            .filterNot { it.description.lowercase() in stopwords }
+            .sortedByDescending { it.score * it.topicality }
+            .map { it.description }
+            .take(5)
+
+        val bestQuery = filtered.firstOrNull() ?: "joker"
+
+        if (filtered.isEmpty()) {
+            println("⚠️ Usando fallback: pegando top 3 por score.")
+            return rawLabels
+                .sortedByDescending {
+                    it.score
+                }
+                .map { it.description }
+                .take(3)
+        }
+
+        return filtered
 
     }
 }
